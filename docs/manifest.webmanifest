@@ -1,7 +1,7 @@
 {
-    "short_name": "Hammy Home",
-    "name": "Hammy Home",
-    "description": "Hammy Home is your home for virtual hamsters.  To get started, simply choose a starter home.  You can then customize your home by changing the colors and/or adding more accessories.  Check abowman.com for updates on new features / accessories.",
+    "short_name": "Hammas",
+    "name": "Hammas",
+    "description": "Hammas is your home for virtual hamsters.  To get started, simply choose a starter home.  You can then customize your home by changing the colors and/or adding more accessories.  Check abowman.com for updates on new features / accessories.",
     "icons": [
       {
         "src": "./images/maskable_icon_x64.png",

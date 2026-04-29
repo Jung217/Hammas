@@ -1,14 +1,16 @@
 // ============================================================
-//  HammyHome Gun Mod  —  純學習/本機遊玩用
+//  Hammas Gun Mod  —  純學習/本機遊玩用
 //  作者：玩家自製；附加於 ham.min.js 之上，不修改原檔
 //
+//  v2 UI/UX 重塑：tactical HUD + glassmorphism，邏輯保持不變
+//
 //  操作：
-//    G          切換開關（OFF / ON）
+//    G          切換開關（STANDBY / ARMED）
+//    Shift+G    DEBUG 開關
 //    滑鼠移動    準心跟著游標
-//    左鍵單擊    單發（游標指到哪射到哪）
+//    左鍵單擊    單發
 //    左鍵按住    連射（約 11 發/秒）
 //    Space      連射（鍵盤替代）
-//    按住拖曳    仍可旋轉場景（相機操作未被攔截）
 //
 //  物理：命中點以 OIMO.js 套用衝量（本遊戲用 OIMO，非 Babylon 內建）
 // ============================================================
@@ -17,6 +19,7 @@
     'use strict';
 
     const HAM_REGEX = /ham|belly|ears?|whisker|snout|paw|cheek|body|armature|fur/i;
+    const HELP_KEY  = 'hammas_gun_help_shown_v2';
 
     function waitForScene(callback) {
         let tries = 0;
@@ -34,96 +37,437 @@
         tick();
     }
 
+    // ============================================================
+    //  UI Injection — 完整重設計
+    // ============================================================
     function injectUI() {
         if (document.getElementById('gunOverlay')) return;
 
         const style = document.createElement('style');
         style.textContent = `
-            #gunOverlay { position:fixed; inset:0; pointer-events:none; z-index:99998; display:none; }
-            #gunOverlay.on { display:block; }
+            /* ---------- Design tokens ---------- */
+            #gunOverlay, #gunToggle, #gunHud, #gunHelp, .gun-bubble, .gun-muzzle, .gun-hit-ring {
+                --gun-bg:          rgba(12, 16, 24, 0.62);
+                --gun-bg-strong:   rgba(12, 16, 24, 0.86);
+                --gun-border:      rgba(255, 255, 255, 0.10);
+                --gun-border-hi:   rgba(255, 255, 255, 0.20);
+                --gun-fg:          #f5f7fb;
+                --gun-fg-dim:      rgba(245, 247, 251, 0.62);
+                --gun-accent:      #ff3a4f;
+                --gun-accent-soft: rgba(255, 58, 79, 0.22);
+                --gun-cyan:        #38bdf8;
+                --gun-warn:        #fbbf24;
+                --gun-radius:      14px;
+                --gun-shadow:      0 10px 32px rgba(0, 0, 0, 0.45);
+                --gun-mono:        ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+                --gun-sans:        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+            }
+
+            /* ---------- Overlay frame ---------- */
+            #gunOverlay {
+                position: fixed; inset: 0;
+                pointer-events: none;
+                z-index: 99998;
+                opacity: 0;
+                transition: opacity .25s ease;
+            }
+            #gunOverlay.on { opacity: 1; }
+
+            #gunOverlay::before {
+                content: "";
+                position: absolute; inset: 0;
+                box-shadow:
+                    inset 0 0 0 1px rgba(255, 58, 79, 0.10),
+                    inset 0 0 80px rgba(255, 58, 79, 0.12);
+                opacity: 0;
+                transition: opacity .35s ease;
+                pointer-events: none;
+            }
+            #gunOverlay.on::before { opacity: 1; }
+
+            /* Tactical corner brackets */
+            #gunOverlay .corner {
+                position: absolute;
+                width: 22px; height: 22px;
+                border: 2px solid rgba(255, 58, 79, 0.85);
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity .35s ease;
+                filter: drop-shadow(0 0 4px rgba(255, 58, 79, 0.55));
+            }
+            #gunOverlay.on .corner { opacity: .9; }
+            #gunOverlay .corner.tl { top: 18px; left:  18px; border-right: 0; border-bottom: 0; }
+            #gunOverlay .corner.tr { top: 18px; right: 18px; border-left:  0; border-bottom: 0; }
+            #gunOverlay .corner.bl { bottom: 18px; left:  18px; border-right: 0; border-top: 0; }
+            #gunOverlay .corner.br { bottom: 18px; right: 18px; border-left:  0; border-top: 0; }
+
+            /* ---------- Crosshair ---------- */
             #gunCrosshair {
-                position:absolute; width:40px; height:40px;
-                transform:translate(-50%,-50%);
-                left:50%; top:50%;
+                position: absolute;
+                width: 60px; height: 60px;
+                left: 50%; top: 50%;
+                transform: translate(-50%, -50%);
                 will-change: left, top;
+                pointer-events: none;
             }
-            #gunCrosshair::before, #gunCrosshair::after {
-                content:''; position:absolute; left:50%; top:50%;
-                background:#ff2020; box-shadow:0 0 4px #ff0;
+            #gunCrosshair svg {
+                width: 100%; height: 100%;
+                overflow: visible;
+                filter: drop-shadow(0 0 6px rgba(255, 58, 79, 0.55));
+                transition: transform .25s cubic-bezier(.2,.7,.3,1);
             }
-            #gunCrosshair::before { width:2px; height:26px; transform:translate(-50%,-50%); }
-            #gunCrosshair::after  { width:26px; height:2px; transform:translate(-50%,-50%); }
-            #gunCrosshair > .dot {
-                position:absolute; left:50%; top:50%;
-                width:6px; height:6px; border-radius:50%;
-                background:#ff2020; transform:translate(-50%,-50%);
-                box-shadow:0 0 6px #f00;
+            #gunCrosshair .ring {
+                fill: none;
+                stroke: rgba(255, 255, 255, 0.85);
+                stroke-width: 1.4;
             }
+            #gunCrosshair .tick {
+                stroke: var(--gun-accent);
+                stroke-width: 2;
+                stroke-linecap: round;
+            }
+            #gunCrosshair .dot { fill: var(--gun-accent); }
+            @keyframes gun-crosshair-pulse {
+                0%, 100% { opacity: 1; }
+                50%      { opacity: .55; }
+            }
+            #gunOverlay.on #gunCrosshair .ring {
+                animation: gun-crosshair-pulse 2.4s ease-in-out infinite;
+            }
+            #gunCrosshair.fire svg {
+                animation: gun-crosshair-recoil .14s ease-out;
+            }
+            @keyframes gun-crosshair-recoil {
+                0%   { transform: scale(1); }
+                45%  { transform: scale(1.22); }
+                100% { transform: scale(1); }
+            }
+
+            /* ---------- Status pill ---------- */
             #gunToggle {
-                position:fixed; top:10px; left:50%; transform:translateX(-50%);
-                padding:6px 14px; background:rgba(0,0,0,.75); color:#fff;
-                border-radius:18px; font:bold 13px/1 monospace;
-                cursor:pointer; user-select:none; pointer-events:auto;
-                z-index:99999; border:2px solid #444;
+                position: fixed;
+                top: 12px; left: 50%;
+                transform: translateX(-50%);
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 10px 8px 12px;
+                min-height: 36px;
+                box-sizing: border-box;
+                background: var(--gun-bg);
+                backdrop-filter: blur(14px) saturate(140%);
+                -webkit-backdrop-filter: blur(14px) saturate(140%);
+                color: var(--gun-fg);
+                font: 600 12px/1 var(--gun-mono);
+                letter-spacing: 0.10em;
+                text-transform: uppercase;
+                border: 1px solid var(--gun-border);
+                border-radius: 999px;
+                box-shadow: var(--gun-shadow);
+                cursor: pointer;
+                user-select: none;
+                pointer-events: auto;
+                z-index: 99999;
+                transition: background .2s ease, border-color .2s ease, transform .12s ease, color .2s ease;
+            }
+            #gunToggle:hover {
+                background: var(--gun-bg-strong);
+                border-color: var(--gun-border-hi);
+            }
+            #gunToggle:active   { transform: translateX(-50%) scale(0.97); }
+            #gunToggle:focus-visible {
+                outline: 2px solid var(--gun-accent);
+                outline-offset: 3px;
+            }
+            #gunToggle .led {
+                width: 8px; height: 8px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.30);
+                flex-shrink: 0;
+                transition: background .2s ease, box-shadow .25s ease;
+            }
+            #gunToggle .label { color: var(--gun-fg-dim); transition: color .2s ease; }
+            #gunToggle .kbd {
+                padding: 3px 6px;
+                font: 700 10px/1 var(--gun-mono);
+                color: var(--gun-fg-dim);
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid var(--gun-border);
+                border-radius: 5px;
+                letter-spacing: 0;
             }
             #gunToggle.armed {
-                background:rgba(180,20,20,.9); border-color:#ff0;
-                animation: gun-pulse 1s infinite;
+                background: linear-gradient(135deg, rgba(255,58,79,0.26), rgba(255,58,79,0.10));
+                border-color: rgba(255, 58, 79, 0.50);
             }
-            @keyframes gun-pulse {
-                0%,100% { box-shadow:0 0 6px #f00; }
-                50%     { box-shadow:0 0 18px #f00; }
+            #gunToggle.armed .label {
+                color: #fff;
+                text-shadow: 0 0 8px rgba(255, 58, 79, 0.7);
             }
+            #gunToggle.armed .led {
+                background: var(--gun-accent);
+                box-shadow: 0 0 10px var(--gun-accent), 0 0 22px var(--gun-accent);
+                animation: gun-led-blink 1.2s ease-in-out infinite;
+            }
+            @keyframes gun-led-blink {
+                0%, 100% { opacity: 1; }
+                50%      { opacity: .35; }
+            }
+
+            /* ---------- HUD ---------- */
             #gunHud {
-                position:fixed; bottom:10px; left:10px;
-                padding:6px 12px; background:rgba(0,0,0,.7); color:#0f0;
-                font:bold 12px/1.4 monospace; border-radius:4px;
-                z-index:99999; pointer-events:none; display:none;
+                position: fixed;
+                bottom: 14px; left: 14px;
+                display: flex;
+                gap: 14px;
+                padding: 10px 16px;
+                background: var(--gun-bg);
+                backdrop-filter: blur(14px) saturate(140%);
+                -webkit-backdrop-filter: blur(14px) saturate(140%);
+                border: 1px solid var(--gun-border);
+                border-radius: var(--gun-radius);
+                box-shadow: var(--gun-shadow);
+                z-index: 99999;
+                pointer-events: none;
+                align-items: center;
+                font-family: var(--gun-mono);
+                opacity: 0;
+                transform: translateY(8px);
+                transition: opacity .25s ease, transform .25s ease;
             }
-            #gunOverlay.on ~ #gunHud { display:block; }
-            body.gun-armed, body.gun-armed * { cursor:none !important; }
-            .gun-muzzle {
-                position:fixed; inset:0;
-                background:radial-gradient(circle at center, rgba(255,220,100,.55), transparent 45%);
-                pointer-events:none; z-index:99997;
-                animation: gun-muzzle .08s ease-out;
+            #gunOverlay.on ~ #gunHud {
+                opacity: 1;
+                transform: translateY(0);
             }
-            @keyframes gun-muzzle { from { opacity:1; } to { opacity:0; } }
+            #gunHud .stat {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+                min-width: 56px;
+            }
+            #gunHud .stat-label {
+                font: 700 9px/1 var(--gun-mono);
+                letter-spacing: 0.16em;
+                color: var(--gun-fg-dim);
+            }
+            #gunHud .stat-value {
+                font: 700 22px/1 var(--gun-mono);
+                font-variant-numeric: tabular-nums;
+                color: var(--gun-fg);
+                text-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+                transform-origin: left center;
+                transition: transform .12s ease, color .2s ease;
+            }
+            #gunHud .stat.ham .stat-value {
+                color: var(--gun-warn);
+                text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+            }
+            #gunHud .stat-value.bump {
+                animation: gun-stat-bump .35s cubic-bezier(.34,1.56,.64,1);
+            }
+            @keyframes gun-stat-bump {
+                0%   { transform: scale(1); }
+                40%  { transform: scale(1.22); color: var(--gun-accent); }
+                100% { transform: scale(1); }
+            }
+            #gunHud .divider {
+                width: 1px;
+                align-self: stretch;
+                background: linear-gradient(to bottom, transparent, var(--gun-border-hi) 30%, var(--gun-border-hi) 70%, transparent);
+            }
+
+            /* ---------- Hit ring (3D-projected) ---------- */
+            .gun-hit-ring {
+                position: fixed;
+                transform: translate(-50%, -50%);
+                width: 8px; height: 8px;
+                border: 2px solid rgba(255, 220, 100, 0.95);
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 99996;
+                animation: gun-hit-ring .38s ease-out forwards;
+                box-shadow: 0 0 14px rgba(255, 200, 80, 0.6);
+            }
+            @keyframes gun-hit-ring {
+                0%   { width: 8px;  height: 8px;  opacity: 1; border-width: 3px; }
+                100% { width: 64px; height: 64px; opacity: 0; border-width: 1px; }
+            }
+
+            /* ---------- Hit bubble ---------- */
             .gun-bubble {
-                position:fixed; transform:translate(-50%,-100%);
-                background:#fff; color:#c00;
-                font:bold 20px 'Comic Sans MS', monospace;
-                padding:4px 12px; border-radius:14px; border:3px solid #000;
-                pointer-events:none; z-index:99999;
-                animation: gun-bubble .9s ease-out forwards;
-                white-space:nowrap;
+                position: fixed;
+                transform: translate(-50%, -100%);
+                font: 800 20px/1 var(--gun-sans);
+                letter-spacing: 0.04em;
+                color: #fff;
+                padding: 6px 14px;
+                border-radius: 12px;
+                background: linear-gradient(180deg, rgba(255, 58, 79, 0.96), rgba(220, 38, 38, 0.96));
+                box-shadow: 0 6px 20px rgba(255, 58, 79, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+                pointer-events: none;
+                z-index: 99999;
+                white-space: nowrap;
+                animation: gun-bubble-fly .9s cubic-bezier(.2, .7, .2, 1) forwards;
             }
-            @keyframes gun-bubble {
-                0%   { opacity:0; transform:translate(-50%,-60%)  scale(.6); }
-                20%  { opacity:1; transform:translate(-50%,-100%) scale(1.3); }
-                80%  { opacity:1; transform:translate(-50%,-150%) scale(1); }
-                100% { opacity:0; transform:translate(-50%,-200%) scale(.9); }
+            .gun-bubble.warn {
+                background: linear-gradient(180deg, rgba(251, 191, 36, 0.97), rgba(217, 119, 6, 0.97));
+                box-shadow: 0 6px 20px rgba(251, 191, 36, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+                color: #1a1208;
+                text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+            }
+            @keyframes gun-bubble-fly {
+                0%   { opacity: 0; transform: translate(-50%, -60%)  scale(.45) rotate(-3deg); }
+                18%  { opacity: 1; transform: translate(-50%, -110%) scale(1.18) rotate(2deg);  }
+                40%  { opacity: 1; transform: translate(-50%, -135%) scale(1)    rotate(-1deg); }
+                100% { opacity: 0; transform: translate(-50%, -200%) scale(.92)  rotate(0deg);  }
+            }
+
+            /* ---------- Muzzle flash ---------- */
+            .gun-muzzle {
+                position: fixed; inset: 0;
+                background: radial-gradient(circle at center,
+                    rgba(255, 220, 140, 0.55) 0%,
+                    rgba(255, 140, 80, 0.18) 30%,
+                    transparent 55%);
+                mix-blend-mode: screen;
+                pointer-events: none;
+                z-index: 99997;
+                animation: gun-muzzle .12s ease-out;
+            }
+            @keyframes gun-muzzle {
+                from { opacity: 1; }
+                to   { opacity: 0; }
+            }
+
+            /* ---------- Help toast ---------- */
+            #gunHelp {
+                position: fixed;
+                top: 60px; left: 50%;
+                transform: translateX(-50%) translateY(-6px);
+                padding: 10px 14px;
+                background: var(--gun-bg-strong);
+                backdrop-filter: blur(14px) saturate(140%);
+                -webkit-backdrop-filter: blur(14px) saturate(140%);
+                border: 1px solid var(--gun-border);
+                border-radius: 10px;
+                box-shadow: var(--gun-shadow);
+                color: var(--gun-fg);
+                font: 500 12px/1.55 var(--gun-sans);
+                letter-spacing: 0.02em;
+                opacity: 0;
+                pointer-events: none;
+                z-index: 99999;
+                white-space: nowrap;
+                transition: opacity .3s ease, transform .3s ease;
+            }
+            #gunHelp.show {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            #gunHelp .row { display: flex; align-items: center; gap: 8px; }
+            #gunHelp .row + .row { margin-top: 4px; }
+            #gunHelp .row .desc { color: var(--gun-fg-dim); }
+            #gunHelp .kbd {
+                display: inline-block;
+                padding: 2px 6px;
+                min-width: 14px;
+                font: 700 10px/1 var(--gun-mono);
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid var(--gun-border);
+                border-radius: 4px;
+                color: var(--gun-fg);
+                text-align: center;
+            }
+
+            /* ---------- Cursor ---------- */
+            body.gun-armed, body.gun-armed * { cursor: none !important; }
+            body.gun-armed #gunToggle, body.gun-armed #gunToggle * { cursor: pointer !important; }
+
+            /* ---------- Reduced motion ---------- */
+            @media (prefers-reduced-motion: reduce) {
+                #gunOverlay, #gunHud, .gun-bubble, .gun-muzzle, #gunHelp,
+                #gunToggle.armed .led, #gunOverlay.on #gunCrosshair .ring,
+                #gunHud .stat-value.bump, .gun-hit-ring, #gunCrosshair.fire svg {
+                    animation: none !important;
+                    transition: opacity .15s linear !important;
+                }
+            }
+
+            /* ---------- Small screens ---------- */
+            @media (max-width: 420px) {
+                #gunHud { gap: 10px; padding: 8px 12px; }
+                #gunHud .stat-value { font-size: 18px; }
+                #gunToggle { font-size: 11px; }
             }
         `;
         document.head.appendChild(style);
 
         const overlay = document.createElement('div');
         overlay.id = 'gunOverlay';
-        overlay.innerHTML = '<div id="gunCrosshair"><div class="dot"></div></div>';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = `
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+            <div id="gunCrosshair">
+                <svg viewBox="0 0 60 60" aria-hidden="true">
+                    <circle class="ring" cx="30" cy="30" r="20"></circle>
+                    <line class="tick" x1="30" y1="3"  x2="30" y2="11"></line>
+                    <line class="tick" x1="30" y1="49" x2="30" y2="57"></line>
+                    <line class="tick" x1="3"  y1="30" x2="11" y2="30"></line>
+                    <line class="tick" x1="49" y1="30" x2="57" y2="30"></line>
+                    <circle class="dot" cx="30" cy="30" r="2.2"></circle>
+                </svg>
+            </div>
+        `;
         document.body.appendChild(overlay);
 
         const toggle = document.createElement('div');
         toggle.id = 'gunToggle';
-        toggle.textContent = 'GUN OFF (press G)';
+        toggle.setAttribute('role', 'button');
+        toggle.setAttribute('tabindex', '0');
+        toggle.setAttribute('aria-pressed', 'false');
+        toggle.setAttribute('aria-label', 'Toggle gun mode (G)');
+        toggle.innerHTML = `
+            <span class="led" aria-hidden="true"></span>
+            <span class="label">STANDBY</span>
+            <span class="kbd" aria-hidden="true">G</span>
+        `;
         document.body.appendChild(toggle);
 
         const hud = document.createElement('div');
         hud.id = 'gunHud';
-        hud.innerHTML =
-            'Shots Hit: <span id="hitCount">0</span> &nbsp;|&nbsp; BONKED: <span id="hamCount">0</span>';
+        hud.setAttribute('aria-hidden', 'true');
+        hud.innerHTML = `
+            <div class="stat shots">
+                <span class="stat-label">SHOTS</span>
+                <span class="stat-value" id="hitCount">0</span>
+            </div>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="stat ham">
+                <span class="stat-label">BONKED</span>
+                <span class="stat-value" id="hamCount">0</span>
+            </div>
+        `;
         document.body.appendChild(hud);
+
+        const help = document.createElement('div');
+        help.id = 'gunHelp';
+        help.setAttribute('role', 'status');
+        help.setAttribute('aria-live', 'polite');
+        help.innerHTML = `
+            <div class="row"><span class="kbd">G</span><span class="desc">arm / disarm</span></div>
+            <div class="row"><span class="kbd">click</span><span class="desc">fire (hold for auto)</span></div>
+            <div class="row"><span class="kbd">space</span><span class="desc">auto fire</span></div>
+        `;
+        document.body.appendChild(help);
     }
 
+    // ============================================================
+    //  Init — 行為邏輯與舊版相同，只更新 UI 控制
+    // ============================================================
     function initGun(scene) {
         injectUI();
 
@@ -135,25 +479,58 @@
         let hamHits = 0;
         let pointerX = window.innerWidth / 2;
         let pointerY = window.innerHeight / 2;
+        let armedOnce = false;
 
-        const crosshair = document.getElementById('gunCrosshair');
-        const toggleBtn = document.getElementById('gunToggle');
-        const hitCounter = document.getElementById('hitCount');
-        const hamCounter = document.getElementById('hamCount');
-        const overlay = document.getElementById('gunOverlay');
+        const overlay     = document.getElementById('gunOverlay');
+        const crosshair   = document.getElementById('gunCrosshair');
+        const toggleBtn   = document.getElementById('gunToggle');
+        const labelEl     = toggleBtn.querySelector('.label');
+        const hitCounter  = document.getElementById('hitCount');
+        const hamCounter  = document.getElementById('hamCount');
+        const helpEl      = document.getElementById('gunHelp');
 
         const updateCrosshair = () => {
             crosshair.style.left = pointerX + 'px';
-            crosshair.style.top = pointerY + 'px';
+            crosshair.style.top  = pointerY + 'px';
+        };
+
+        const bumpStat = (el) => {
+            el.classList.remove('bump');
+            // 強制 reflow 以重啟動畫
+            void el.offsetWidth;
+            el.classList.add('bump');
+        };
+
+        const showHelp = () => {
+            helpEl.classList.add('show');
+            const dismiss = () => {
+                helpEl.classList.remove('show');
+                try { localStorage.setItem(HELP_KEY, '1'); } catch (e) {}
+                window.removeEventListener('pointerdown', dismiss, true);
+            };
+            setTimeout(dismiss, 4500);
+            window.addEventListener('pointerdown', dismiss, true);
         };
 
         const setGunOn = (on) => {
             gunOn = on;
             overlay.classList.toggle('on', on);
-            toggleBtn.textContent = on ? 'GUN ON (press G)' : 'GUN OFF (press G)';
             toggleBtn.classList.toggle('armed', on);
+            toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            overlay.setAttribute('aria-hidden', on ? 'false' : 'true');
+            labelEl.textContent = on ? 'ARMED' : 'STANDBY';
             document.body.classList.toggle('gun-armed', on);
-            if (on) updateCrosshair(); else stopFire();
+            if (on) {
+                updateCrosshair();
+                if (!armedOnce) {
+                    armedOnce = true;
+                    let seen = false;
+                    try { seen = !!localStorage.getItem(HELP_KEY); } catch (e) {}
+                    if (!seen) showHelp();
+                }
+            } else {
+                stopFire();
+            }
         };
 
         // ------- 輸入事件 -------
@@ -165,11 +542,9 @@
         }, true);
 
         // pointerdown：僅在 gun ON + 左鍵 + 目標是 3D canvas 時開火
-        // 不呼叫 stopPropagation，讓相機拖曳仍可運作（單純點擊不會拖到相機）
         window.addEventListener('pointerdown', (e) => {
             if (!gunOn || e.button !== 0) return;
             if (e.target && e.target.closest && e.target.closest('#gunToggle')) return;
-            // 只攔截在 canvas 上的點擊
             if (e.target !== canvas) return;
             pointerX = e.clientX;
             pointerY = e.clientY;
@@ -197,7 +572,6 @@
                                 particles: x.sps.particles && x.sps.particles.length,
                                 hasPickedParticles: !!x.sps.pickedParticles,
                             })));
-                        // spsManagerManager 內部結構偵察
                         try {
                             const z = (typeof z0 !== 'undefined') ? z0 : window.z0;
                             const mm = z.app.graphicsHelper.spsManagerManager;
@@ -215,7 +589,6 @@
                             console.log('[gun] pickablez1080s len=', pk.length,
                                 'meshes=', pk.map(x => x && x.mesh && x.mesh.name));
                         } catch (e) { console.warn('[gun] mm inspect failed', e); }
-                        // 所有名字有 SPS 的 mesh
                         const spsMeshes = scene.meshes.filter(m => /SPS/i.test(m.name || ''));
                         console.log('[gun] meshes named SPS:', spsMeshes.length,
                             spsMeshes.map(m => ({
@@ -223,7 +596,6 @@
                                 pick: m.isPickable, vis: m.isVisible,
                                 hasSps: !!(m._sps || m.solidParticleSystem || m.sps)
                             })));
-                        // 食物類 mesh
                         const foodMeshes = scene.meshes.filter(m =>
                             /food|seed|corn|pumpkin|sunflower|disc|donut/i.test(m.name || '')
                         ).map(m => ({
@@ -251,6 +623,12 @@
             e.stopPropagation();
             setGunOn(!gunOn);
         });
+        toggleBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setGunOn(!gunOn);
+            }
+        });
 
         // ------- 連射迴圈：rAF + 時間節流 -------
         let firing = false;
@@ -260,7 +638,7 @@
         function startFire() {
             if (!gunOn || firing) return;
             firing = true;
-            lastFireAt = 0;          // 立即射第一發
+            lastFireAt = 0;
             fireLoop();
         }
         function stopFire() { firing = false; }
@@ -284,30 +662,27 @@
             return null;
         }
 
-        const KICK_RADIUS    = 1.8;   // 空間濺射搜尋半徑
-        const KICK_DV        = 4.0;   // 命中目標增加多少速度 (units/sec)
-        const KICK_LIFT      = 0.4;   // 向上附加速度
-        const SPLASH_MUL     = 0.35;  // 濺射相較直擊的強度
-        const MAX_EFF_MASS   = 10;    // 質量上限：>此值的物件吃到的脈衝被壓下來
+        const KICK_RADIUS    = 1.8;
+        const KICK_DV        = 4.0;
+        const KICK_LIFT      = 0.4;
+        const SPLASH_MUL     = 0.35;
+        const MAX_EFF_MASS   = 10;
 
-        // 倉鼠專用加強（4 節身體同步，要蓋過 AI 位置覆寫）
-        const HAMSTER_DV     = 24;    // 超大 DV 才看得出被撞
-        const HAMSTER_LIFT   = 8;     // 往上噴一點
+        const HAMSTER_DV     = 24;
+        const HAMSTER_LIFT   = 8;
         const HAMSTER_PART_RE = /^hamster\d*(_|$)/i;
 
-        // 結構性物件（籠子、牆、地板、天花板、背景）不接受物理衝擊，
-        // 否則打中旁邊配件就會把整個籠子推位移。
-        const STRUCTURE_RE   = /^(cage|wall|floor|ceiling|background)/i;
+        // OIMO body 命名是 {Object}_{part}：例如 Wheel1a_stand、Wheel1a_base、
+        // House1_houseBumper1、boxChew0。除前綴外，也要擋住結構性後綴 (_stand/_base/
+        // _holder/_inside/_button/_roof/_ears/_saucer) 與所有 *Bumper 觸發體。
+        const STRUCTURE_RE   = /(^(cage|wall|floor|ceiling|background|wheel|w\d+[a-c]|house|tube|connector|cover|ramp|bridge|platform|suction|box|swing))|(_stand|_base|_holder|_inside|_button|_roof|_ears|_saucer|bumper)/i;
 
-        // 視覺 jiggle 黑名單：有真實物理的東西不晃（避免雙重反應），以及大結構
         const JIGGLE_BLACKLIST = /^(Background|SPS|bedding|cage|wall|floor|ceiling|hamster|simpleChew|stickChew|boxChew|hangingChew|wheel|w\d+a|waterLine|foodMound)/i;
-        const JIGGLE_DIST      = 0.08;  // 位移距離
-        const JIGGLE_MS        = 160;   // 回彈時間
+        const JIGGLE_DIST      = 0.08;
+        const JIGGLE_MS        = 160;
 
-        let   DEBUG          = false; // Shift+G 切換
+        let DEBUG = false;
 
-        // 從打到的 mesh 往上找所屬遊戲物件（Bowl, Food, SimpleChew …）
-        // 這些物件常有 body / dynamicBody / bumper2 等 OIMO body 屬性
         const OWNER_KEYS = ['owner', 'gameObject', 'entity', '_owner', '_entity',
                             '__obj', 'accessory', 'parent3d'];
         const BODY_KEYS  = ['body', 'dynamicBody', 'bumper2', 'draggerBody'];
@@ -316,11 +691,9 @@
             let m = mesh;
             let depth = 0;
             while (m && depth < 8) {
-                // 先檢查 mesh 自己有沒有直接連到的 body
                 for (const k of BODY_KEYS) {
                     if (m[k] && typeof m[k].applyImpulse === 'function') return m;
                 }
-                // 再檢查有沒有 owner-like 屬性
                 for (const k of OWNER_KEYS) {
                     const o = m[k];
                     if (o) {
@@ -350,12 +723,11 @@
 
             const dn = dir.normalizeToNew ? dir.normalizeToNew() : dir;
             const hx = hitPoint.x, hy = hitPoint.y, hz = hitPoint.z;
-            const kicked = new Set();   // 已踢過的 body（避免雙重觸發）
+            const kicked = new Set();
 
-            // strength = 1.0 直擊 / 0~SPLASH_MUL 濺射
             const kickBody = (body, strength, label) => {
                 if (!body) return false;
-                if (kicked.has(body)) return false;  // 不重複踢
+                if (kicked.has(body)) return false;
                 if (!body.isDynamic || body.inverseMass <= 0) {
                     if (DEBUG) console.log('[gun] skip static:', label, body.name);
                     return false;
@@ -365,7 +737,6 @@
                     const effMass = Math.min(mass, MAX_EFF_MASS);
                     const dv = KICK_DV * strength;
                     const liftDv = KICK_LIFT * strength;
-                    // 脈衝 = delta-v × 質量（OIMO 會除回 mass，實際 delta-v ≈ dv）
                     const f = new OIMO.Vec3(
                         dn.x * dv * effMass,
                         (dn.y * dv + liftDv) * effMass,
@@ -385,7 +756,7 @@
                 }
             };
 
-            // 0) 倉鼠特例：只踢「被命中那隻」的 4 節身體（不要波及其他倉鼠）
+            // 0) 倉鼠特例
             let targetHamsterRe = null;
             if (pickedMesh) {
                 const m = (pickedMesh.name || '').match(/^hamster(\d+)/i);
@@ -419,8 +790,7 @@
                 if (DEBUG) console.log('[gun] HAMSTER', targetHamsterRe, '→', parts, 'parts');
             }
 
-            // 1) Direct hit：從 mesh 追 owner，踢其 body（全力）
-            //    結構物（籠子等）跳過，避免擊中籠壁就把籠子推走
+            // 1) Direct hit
             if (pickedMesh && !STRUCTURE_RE.test(pickedMesh.name || '')) {
                 const owner = findOwnerFromMesh(pickedMesh);
                 if (owner) {
@@ -445,8 +815,7 @@
                 }
             }
 
-            // 2) 空間濺射：半徑內其他動態 body（弱化）
-            //    排除所有 hamster* body（只打到一隻時不該連帶噴飛其他倉鼠）
+            // 2) 空間濺射
             let body = world.rigidBodies;
             let scanned = 0, inRange = 0;
             while (body) {
@@ -470,7 +839,7 @@
             return kicked.size;
         }
 
-        // SPS 查找：多管道、多結構，把能抓到的都塞進 list
+        // SPS 查找
         function findAllSPS() {
             const list = [];
             const push = (mesh, sps) => {
@@ -487,20 +856,15 @@
                         if (!pool) continue;
                         for (const o of pool) {
                             if (!o) continue;
-                            // Pattern A: o.sps = Babylon SPS
                             if (o.sps && o.sps.particles) push(o.sps.mesh, o.sps);
-                            // Pattern B: o 本身就是 Babylon SPS
                             if (o.particles && o.mesh) push(o.mesh, o);
-                            // Pattern C: o.mesh 的自我 reference
                             if (o.mesh && o.mesh.sps) push(o.mesh, o.mesh.sps);
                         }
                     }
                 }
             } catch (e) {}
-            // 備援：Babylon 內建清單
             const arr = scene._solidParticleSystems || [];
             for (const sps of arr) push(sps.mesh, sps);
-            // 備援：mesh 上直接掛的
             for (const m of scene.meshes) {
                 const cand = m._sps || m.solidParticleSystem || m.sps;
                 if (cand && cand.particles) push(m, cand);
@@ -512,8 +876,7 @@
             if (!__spsCache || !__spsCache.length) __spsCache = findAllSPS();
             return __spsCache;
         }
-        // 精準：用 pickInfo.faceId → sps.pickedParticles[faceId].idx 找到那顆粒子
-        // 退而求其次用 nearest point
+
         function kickSPSParticle(hitInfo, dn) {
             if (!hitInfo || !hitInfo.pickedPoint) return false;
             const point = hitInfo.pickedPoint;
@@ -527,7 +890,6 @@
             let particle = null;
             let entry = null;
 
-            // Method 1：faceId 精準（若 mesh 能對上就試，否則掃全部）
             const fId = hitInfo.faceId;
             if (fId != null) {
                 let tryE = spsList.find(x => x.mesh === hitMesh);
@@ -537,7 +899,6 @@
                     const p = tryE.sps.particles && tryE.sps.particles[idx];
                     if (p) { particle = p; entry = tryE; }
                 }
-                // 沒找到 → 掃全部 SPS 的 pickedParticles[fId]，驗證距離合理
                 if (!particle) {
                     for (const e of spsList) {
                         if (e.sps.pickedParticles && e.sps.pickedParticles[fId]) {
@@ -557,7 +918,6 @@
                     'on', entry.mesh && entry.mesh.name);
             }
 
-            // Method 2：空間搜尋 — 掃所有 SPS 所有粒子（最穩當的後路）
             if (!particle) {
                 let bestDist = 0.7 * 0.7;
                 for (const e of spsList) {
@@ -590,7 +950,6 @@
                 particle.position.x += dn.x * 0.12;
                 particle.position.y += 0.08;
                 particle.position.z += dn.z * 0.12;
-                // 隨機角速度
                 if (particle.rotation) {
                     particle.rotation.x += (Math.random() - 0.5) * 0.6;
                     particle.rotation.y += (Math.random() - 0.5) * 0.6;
@@ -606,7 +965,7 @@
             }
         }
 
-        // 自家 raycast：繞過 isPickable（食物、食物顆粒等常被設成不可 pick）
+        // 自家 raycast
         const PASSTHROUGH_RE = /^(Background|SPS|bedding|__gun_)/i;
         function customPick(ray) {
             let best = null;
@@ -629,7 +988,7 @@
             return best;
         }
 
-        // ------- 實際開火：以游標位置做 scene.pick -------
+        // ------- 實際開火 -------
         function fire() {
             const cam = scene.activeCamera;
             if (!cam) return;
@@ -648,8 +1007,6 @@
                     m.isVisible !== false &&
                     !String(m.name || '').startsWith('__gun_')
                 );
-                // 若 scene.pick 打到「穿透用」的背板（表示前面有 isPickable=false 的東西被忽略），
-                // 退而求其次自己 iterate 所有 mesh 找最近交點
                 if (info && info.hit && PASSTHROUGH_RE.test(info.pickedMesh && info.pickedMesh.name || '')) {
                     const deep = customPick(ray);
                     if (deep && deep.hit && deep.distance < info.distance + 0.01) {
@@ -662,8 +1019,11 @@
 
             flashMuzzle();
             bang();
+            // 視覺後座力：準心輕微縮放
+            crosshair.classList.remove('fire');
+            void crosshair.offsetWidth;
+            crosshair.classList.add('fire');
 
-            // 彈道線：從「攝影機前方偏下、偏右」到命中點
             let end;
             try {
                 if (info && info.hit) {
@@ -677,7 +1037,6 @@
             } catch (e) {}
 
             if (info && info.hit) {
-                // 子彈方向 = 射線方向（水平成分為主）
                 const dir = ray ? ray.direction : cam.getForwardRay().direction;
                 registerHit(info.pickedPoint, info.pickedMesh, dir, info);
             }
@@ -702,21 +1061,21 @@
             const el = document.createElement('div');
             el.className = 'gun-muzzle';
             document.body.appendChild(el);
-            setTimeout(() => el.remove(), 70);
+            setTimeout(() => el.remove(), 90);
         }
 
         function registerHit(point, mesh, dir, pickInfo) {
             hits++;
             hitCounter.textContent = hits;
+            bumpStat(hitCounter);
             spawnSparks(point);
+            popHitRing(point);
 
-            // 對命中點周圍的 OIMO 動態物件施加衝量（配件、食物、碗、chew 等）
             const kicked = applyOimoKick(point, dir || new BABYLON.Vector3(0, 0, 1), mesh);
             if (DEBUG) console.log('[gun] hit mesh:', (mesh && mesh.name) || '(none)',
                 'at', point.x.toFixed(2), point.y.toFixed(2), point.z.toFixed(2),
                 '→ kicked', kicked, 'bodies');
 
-            // 命中 SPS（食物粒子系統）→ 用 faceId 找那顆粒子推
             const meshName = (mesh && mesh.name) || '';
             let spsHit = false;
             if (/^(SPS|bedding|food|particle)/i.test(meshName)) {
@@ -725,7 +1084,6 @@
                 spsHit = kickSPSParticle(pickInfo || { pickedMesh: mesh, pickedPoint: point }, dn);
             }
 
-            // 視覺 jiggle：沒命中 SPS 粒子、非黑名單
             if (!spsHit && mesh && !JIGGLE_BLACKLIST.test(meshName)) {
                 jiggleMesh(mesh, dir || new BABYLON.Vector3(0, 0, 1));
             }
@@ -734,9 +1092,19 @@
             if (HAM_REGEX.test(name)) {
                 hamHits++;
                 hamCounter.textContent = hamHits;
+                bumpStat(hamCounter);
                 hamsterFlash(mesh);
-                const cries = ['OUCH!', 'EEK!', '!?', '@#!*', '*BONK*', 'OOF', 'SQUEAK!'];
-                popBubble(point, cries[Math.floor(Math.random() * cries.length)]);
+                const cries = [
+                    ['OUCH!',  ''],
+                    ['EEK!',   ''],
+                    ['!?',     ''],
+                    ['@#!*',   ''],
+                    ['*BONK*', 'warn'],
+                    ['OOF',    'warn'],
+                    ['SQUEAK!',''],
+                ];
+                const c = cries[Math.floor(Math.random() * cries.length)];
+                popBubble(point, c[0], c[1]);
             }
         }
 
@@ -784,7 +1152,27 @@
             } catch (e) {}
         }
 
-        // 靜態 mesh 的視覺位移（不透過物理，直接位移再彈回）
+        // 命中環（2D 投影 → 螢幕）
+        function popHitRing(point3d) {
+            try {
+                const cam = scene.activeCamera;
+                const coords = BABYLON.Vector3.Project(
+                    point3d,
+                    BABYLON.Matrix.Identity(),
+                    scene.getTransformMatrix(),
+                    cam.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+                );
+                const dpr = window.devicePixelRatio || 1;
+                const ring = document.createElement('div');
+                ring.className = 'gun-hit-ring';
+                ring.style.left = (coords.x / dpr) + 'px';
+                ring.style.top  = (coords.y / dpr) + 'px';
+                document.body.appendChild(ring);
+                setTimeout(() => ring.remove(), 400);
+            } catch (e) {}
+        }
+
+        // 靜態 mesh 視覺位移
         const jiggling = new WeakSet();
         function jiggleMesh(mesh, dir) {
             if (!mesh) return;
@@ -795,7 +1183,6 @@
             if (jiggling.has(mesh)) return;
             jiggling.add(mesh);
 
-            // 防止 Babylon worldMatrix 被 freeze 導致改 position 沒用
             try { mesh.unfreezeWorldMatrix && mesh.unfreezeWorldMatrix(); } catch (e) {}
 
             const dn = dir.normalizeToNew ? dir.normalizeToNew() : dir;
@@ -827,7 +1214,6 @@
         }
 
         function hamsterFlash(mesh) {
-            // 倉鼠本身通常不是 OIMO 動態 body（由 AI 控制），視覺上紅閃
             try {
                 const mat = mesh.material;
                 if (!mat || !('emissiveColor' in mat)) return;
@@ -837,7 +1223,7 @@
             } catch (e) {}
         }
 
-        function popBubble(point3d, text) {
+        function popBubble(point3d, text, variant) {
             try {
                 const cam = scene.activeCamera;
                 const coords = BABYLON.Vector3.Project(
@@ -848,12 +1234,12 @@
                 );
                 const dpr = window.devicePixelRatio || 1;
                 const el = document.createElement('div');
-                el.className = 'gun-bubble';
+                el.className = 'gun-bubble' + (variant ? ' ' + variant : '');
                 el.textContent = text;
                 el.style.left = (coords.x / dpr) + 'px';
-                el.style.top = (coords.y / dpr) + 'px';
+                el.style.top  = (coords.y / dpr) + 'px';
                 document.body.appendChild(el);
-                setTimeout(() => el.remove(), 900);
+                setTimeout(() => el.remove(), 920);
             } catch (e) {}
         }
 
@@ -890,7 +1276,7 @@
             } catch (e) {}
         }
 
-        console.log('Gun mod ready. Press G to arm, move mouse to aim, click/hold to fire.');
+        console.log('Gun mod ready (UI v2). Press G to arm, click/hold to fire.');
     }
 
     if (document.readyState === 'loading') {

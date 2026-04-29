@@ -7,9 +7,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#e59c14">
-    <meta name="description" content="Design and care for virtual hamsters and their homes with Hammy Home.">
+    <meta name="description" content="Design and care for virtual hamsters and their homes with Hammas.">
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
     <link rel="apple-touch-icon" href="./images/icon_192.png">
-    <title>HammyHome</title>
+    <title>Hammas</title>
     <style>
         
         html, body, div, span, h1, h2, h3, p, a, em, img, fieldset, form, label, legend, canvas, footer, header, section {
@@ -54,28 +56,40 @@
         }
         #splash {
             display: grid;
-            width: 100%; 
+            width: 100%;
             height: 100%;
             place-items: center;
-            color: rgba(255,255,255, .8);
-            background-color: rgb(230, 156, 21);
+            color: rgba(255, 255, 255, 0.92);
+            background:
+                radial-gradient(ellipse at 50% 20%, rgba(255, 210, 120, 0.55), transparent 60%),
+                radial-gradient(ellipse at 50% 110%, rgba(180, 95, 15, 0.65), transparent 65%),
+                rgb(230, 156, 21);
             text-align: center;
         }
         #splash h1 {
-            font-size: 52px;
-            line-height: 52px;
+            font-size: 56px;
+            line-height: 56px;
             margin-left: 10px;
             margin-right: 10px;
             word-spacing: -12px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            text-shadow: 0 6px 22px rgba(80, 40, 0, 0.28);
         }
         #imgSplash {
             max-width: 80vw;
             max-height: 60vh;
             height: auto;
             width: auto;
+            filter: drop-shadow(0 14px 30px rgba(80, 40, 0, 0.18));
         }
         #splash .appVersion {
-            padding: 6px;
+            padding: 8px 6px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+            opacity: 0.72;
         }
         @-webkit-keyframes spin {
             0% { -webkit-transform: rotate(0deg); }
@@ -112,20 +126,19 @@
                     <img src="./images/spinner_512.png" id="imgSpinner" class="spinner" style="position:relative; left:-50%; max-width:100%; max-height:100%"  />
                 </div>
             </div>
-            <h1 class="title">Hammy Home</h1>
-            <div class="appVersion">v1.4.0</div>
+            <h1 class="title">Hammas</h1>
+            <div class="appVersion">v1.0</div>
         </div>
     </div>
     <div id="main" touch-action="none" style="visibility: hidden;">
         <canvas id="mainCanvas" class="full-screen" touch-action="none"></canvas>
-        <div id="aBowman">
-            <a target="_blank" rel="noopener" href="https://www.abowman.com">aBowman <span class="icon-external-link"></span></a>
-        </div>
+        <!-- ham.min.js 的 resize handler 會抓 #aBowman 設 transform；保留隱藏 stub 防 null deref -->
+        <div id="aBowman" style="display:none" aria-hidden="true"></div>
     </div>
 
     <div id="start" class="full-screen noselect" touch-action="auto">
-        <h1>HammyHome</h1>
-        <p id="appInfo"><a target="_blank" rel="noopener" href="https://www.abowman.com"><span id='appVersion'></span> by aBowman <span class="icon-external-link"></span></a></p>
+        <h1>Hammas</h1>
+        <p id="appInfo"><a target="_blank" rel="noopener" href="https://cjchien.com">v1.0 by Jung217 <span class="icon-external-link"></span></a><span id="appVersion" style="display:none" aria-hidden="true"></span></p>
         <div id="myHomes">
             <h2>My Hamster Homes</h2>
             <div class="horiz-scroll-cont">
@@ -142,7 +155,143 @@
     </div>
 
     <link rel="stylesheet" href="css/styles.min.css" >
-    
+
+    <style>
+        /* ============ Start screen polish (non-game UI override) ============ */
+        :root {
+            --hh-fg: #f5f7fb;
+            --hh-fg-dim: rgba(245, 247, 251, 0.66);
+            --hh-accent: #34d399;
+            --hh-bg-card: rgba(255, 255, 255, 0.05);
+            --hh-bg-card-hi: rgba(255, 255, 255, 0.09);
+            --hh-border: rgba(255, 255, 255, 0.12);
+            --hh-shadow-card: 0 10px 30px rgba(0, 0, 0, 0.42);
+            --hh-shadow-card-hi: 0 18px 42px rgba(0, 0, 0, 0.55);
+        }
+        #start {
+            background:
+                radial-gradient(ellipse at 25% 0%, rgba(255, 175, 90, 0.18), transparent 55%),
+                radial-gradient(ellipse at 75% 110%, rgba(99, 102, 241, 0.14), transparent 55%),
+                linear-gradient(180deg, rgba(15, 19, 28, 0.78), rgba(15, 19, 28, 0.86));
+            backdrop-filter: blur(10px) saturate(120%);
+            -webkit-backdrop-filter: blur(10px) saturate(120%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Muli", Roboto, system-ui, sans-serif;
+        }
+        #start h1 {
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-top: 28px;
+            margin-bottom: 4px;
+            color: var(--hh-fg);
+            text-shadow: 0 4px 18px rgba(0, 0, 0, 0.42);
+        }
+        #start h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            margin-top: 30px;
+            margin-bottom: 10px;
+            color: var(--hh-fg);
+        }
+        #start #appInfo {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.65;
+            margin-left: 22px;
+            margin-bottom: 4px;
+        }
+        #start #appInfo a:link, #start #appInfo a:visited { color: var(--hh-fg); }
+
+        /* Card polish */
+        .cage-button {
+            border: none;
+            border-radius: 16px;
+            background: var(--hh-bg-card);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow:
+                var(--hh-shadow-card),
+                inset 0 0 0 1px var(--hh-border);
+            overflow: hidden;
+            transition:
+                transform .25s cubic-bezier(.2, .7, .3, 1),
+                box-shadow .25s ease,
+                background .25s ease;
+        }
+        .cage-button.selected {
+            border: none;
+            border-radius: 16px;
+            box-shadow:
+                var(--hh-shadow-card),
+                inset 0 0 0 3px var(--hh-accent),
+                0 0 0 4px rgba(52, 211, 153, 0.18);
+        }
+        @media (hover: hover) and (pointer: fine) {
+            .cage-button:hover {
+                transform: translateY(-4px);
+                background: var(--hh-bg-card-hi);
+                box-shadow:
+                    var(--hh-shadow-card-hi),
+                    inset 0 0 0 1px rgba(255, 255, 255, 0.20);
+            }
+            .cage-button.selected:hover {
+                transform: translateY(-4px);
+                box-shadow:
+                    var(--hh-shadow-card-hi),
+                    inset 0 0 0 3px var(--hh-accent),
+                    0 0 0 4px rgba(52, 211, 153, 0.22);
+            }
+        }
+        .cage-button:active { transform: translateY(-1px); }
+
+        .cage-name {
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            padding: 6px 14px;
+            margin: 8px;
+            color: var(--hh-fg);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        }
+
+        /* Instructions */
+        #start .instructions {
+            color: var(--hh-fg-dim);
+            font-size: 16px;
+            font-weight: 500;
+            line-height: 1.6;
+            text-align: center;
+            padding: 0 24px;
+            height: auto;
+            min-height: 40px;
+            margin: 18px 0;
+            letter-spacing: 0.01em;
+        }
+
+        /* Smaller screens */
+        @media (max-width: 520px) {
+            #start h1 { font-size: 34px; margin-top: 20px; }
+            #start h2 { font-size: 19px; margin-top: 24px; }
+            .cage-name { font-size: 14px; padding: 5px 12px; }
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            .cage-button { transition: none !important; }
+            .cage-button:hover { transform: none !important; }
+        }
+
+        /* 隱藏 ham.min.js 載 home 時動態插入的 progress bar */
+        .progress-bar { display: none !important; }
+    </style>
+
     <script src="js/babylon.js"></script>
     <script src="js/libs.js"></script>
     <script src="js/ham.min.js"></script>

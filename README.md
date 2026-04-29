@@ -1,6 +1,6 @@
 # Hammas
 
-> 參考來源：[hammyhome.com](https://hammyhome.com/)  版本 v1.4.0（更新於 2026-02-15）
+> 參考來源：[hammyhome.com](https://hammyhome.com/)  版本 v1.0（更新於 2026-02-15）
 > 
 > 作者：[aBowman](https://www.abowman.com)
 > 
