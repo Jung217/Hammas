@@ -143,11 +143,10 @@
                 100% { transform: scale(1); }
             }
 
-            /* ---------- Status pill ---------- */
+            /* ---------- Status pill (bottom-right; 不擋 header dropdown) ---------- */
             #gunToggle {
                 position: fixed;
-                top: 12px; left: 50%;
-                transform: translateX(-50%);
+                bottom: 110px; right: 14px;
                 display: inline-flex;
                 align-items: center;
                 gap: 10px;
@@ -174,7 +173,7 @@
                 background: var(--gun-bg-strong);
                 border-color: var(--gun-border-hi);
             }
-            #gunToggle:active   { transform: translateX(-50%) scale(0.97); }
+            #gunToggle:active   { transform: scale(0.97); }
             #gunToggle:focus-visible {
                 outline: 2px solid var(--gun-accent);
                 outline-offset: 3px;
@@ -340,11 +339,11 @@
                 to   { opacity: 0; }
             }
 
-            /* ---------- Help toast ---------- */
+            /* ---------- Help toast (隨 toggle 顯示在右下方) ---------- */
             #gunHelp {
                 position: fixed;
-                top: 60px; left: 50%;
-                transform: translateX(-50%) translateY(-6px);
+                bottom: 156px; right: 14px;
+                transform: translateY(6px);
                 padding: 10px 14px;
                 background: var(--gun-bg-strong);
                 backdrop-filter: blur(14px) saturate(140%);
@@ -363,7 +362,7 @@
             }
             #gunHelp.show {
                 opacity: 1;
-                transform: translateX(-50%) translateY(0);
+                transform: translateY(0);
             }
             #gunHelp .row { display: flex; align-items: center; gap: 8px; }
             #gunHelp .row + .row { margin-top: 4px; }

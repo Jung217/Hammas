@@ -290,6 +290,97 @@
 
         /* 隱藏 ham.min.js 載 home 時動態插入的 progress bar */
         .progress-bar { display: none !important; }
+
+        /* ============ 遊戲內 header 按鈕優化 (左上 back-btn / 標題 / 右上工具列) ============ */
+        /* ham.min.js 原本是平的 rgba(0,0,0,.2) 方塊；換成 glass + 圓角 + hover 反饋 */
+        #main > .header > .back-btn,
+        #main > .header > .title,
+        #main > .header > .header-btns-right > div,
+        #main > .header > .header-edit-btns > div {
+            color: #f5f7fb !important;
+            background-color: rgba(12, 16, 24, 0.55) !important;
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+            border-radius: 12px !important;
+            transition: background-color .2s ease, border-color .2s ease, transform .12s ease;
+        }
+        #main > .header > .back-btn { margin: 6px !important; }
+        #main > .header > .title    { margin: 6px !important; }
+        #main > .header > .header-btns-right { margin: 6px 6px 6px 0 !important; gap: 6px; display: flex; }
+        #main > .header > .header-btns-right > div:first-child,
+        #main > .header > .header-btns-right > div:last-child { border-radius: 12px !important; }
+
+        /* hover / active */
+        @media (hover: hover) and (pointer: fine) {
+            #main > .header > .back-btn:hover,
+            #main > .header > .header-btns-right > div:hover,
+            #main > .header > .header-edit-btns > div:hover {
+                background-color: rgba(20, 26, 38, 0.78) !important;
+                border-color: rgba(255, 255, 255, 0.20);
+            }
+        }
+        #main > .header > .back-btn:active,
+        #main > .header > .header-btns-right > div:active,
+        #main > .header > .header-edit-btns > div:active { transform: scale(0.95); }
+
+        /* 標題排版微調 */
+        #main > .header > .title {
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        /* drop-down options（左上選單展開時的清單）也跟上 */
+        .drop-down-options > div {
+            background-color: rgba(12, 16, 24, 0.78) !important;
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            transition: background-color .2s ease;
+        }
+        .drop-down-options > div:first-child { border-radius: 12px 12px 0 0 !important; }
+        .drop-down-options > div:last-child  { border-radius: 0 0 12px 12px !important; border-bottom: 0; }
+        /* 單一 child（例如只剩 Delete）四角全圓 */
+        .drop-down-options > div:only-child  { border-radius: 12px !important; border-bottom: 0 !important; }
+        @media (hover: hover) and (pointer: fine) {
+            .drop-down-options > div:hover {
+                background-color: rgba(28, 36, 50, 0.92) !important;
+            }
+        }
+        .drop-down-options { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40); border-radius: 12px !important; }
+
+        /* ============ 拿掉左上的 3-dot 編輯選單（多餘的灰色塊） ============ */
+        #more-edit-options-btn,
+        #more-edit-options-menu { display: none !important; }
+
+        /* ============ 右上：拿掉 3-dot wrapper，Delete 直接露出 ============ */
+        #more-options-btn { display: none !important; }
+        /* 強制把 #more-options-menu (drop-down-options) 永遠顯示在原本 3-dot 的位置 */
+        #more-options-menu {
+            display: block !important;
+            top: 6px !important;
+            right: 6px !important;
+        }
+        /* Delete 按鈕本身：縮小 padding、加 cursor、保持 glass 風格 */
+        #delete-cage-btn {
+            padding: 10px 14px !important;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            display: inline-flex !important;
+            align-items: center;
+            gap: 8px;
+        }
+        #delete-cage-btn .icon-trash { font-size: 18px; }
+        @media (hover: hover) and (pointer: fine) {
+            #delete-cage-btn:hover {
+                background-color: rgba(220, 38, 38, 0.55) !important;
+            }
+        }
+        #delete-cage-btn:active {
+            background-color: rgba(220, 38, 38, 0.7) !important;
+        }
     </style>
 
     <script src="js/babylon.js"></script>
