@@ -213,18 +213,6 @@ Web Audio 合成：白噪 buffer × 指數衰減 envelope → biquad 低通 1600
 
 > 第三方檔案（`ham.min.js`、`babylon.js`、`libs.js`、`pep.min.js`、`styles.min.css`、所有 `.json` 資料、`.fx` 著色器、字型、原 PNG icon）全部保持原狀。
 
-## 離線快取策略（`sw.js`，目前 dev 已停用）
-
-以 5 個快取群組分開管理（版本 `v461`）：
-- `data-v461` — 場景資料 + 著色器
-- `fonts-v461` — 字型
-- `images-v461` — 圖片
-- `jslibs-v461` — 第三方函式庫
-- `ham-v461` — 主程式 + 樣式 + HTML
-
-`fetch` 事件：**cache-first**，快取沒命中才上網。
-
-> 開發期 `index.html` 用 `if (false &&` 短路，並主動 `unregister` 既有 SW，避免改檔被舊快取卡住。要還原：把 `if (false &&` 改回 `if (`。
 
 ## 本機執行
 
