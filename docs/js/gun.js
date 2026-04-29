@@ -292,6 +292,25 @@
                 100% { width: 64px; height: 64px; opacity: 0; border-width: 1px; }
             }
 
+            /* ---------- Blood vignette (邊緣紅色閃光，命中瞬間整螢幕反饋) ---------- */
+            .gun-blood-vignette {
+                position: fixed; inset: 0;
+                pointer-events: none;
+                z-index: 99996;
+                background: radial-gradient(ellipse at center,
+                    transparent 35%,
+                    rgba(180, 0, 8, 0.10) 65%,
+                    rgba(140, 0, 6, 0.32) 90%,
+                    rgba(110, 0, 4, 0.42) 100%);
+                animation: gun-blood-vignette .55s ease-out forwards;
+            }
+            @keyframes gun-blood-vignette {
+                0%   { opacity: 0; }
+                15%  { opacity: 1; }
+                100% { opacity: 0; }
+            }
+
+
             /* ---------- Hit bubble ---------- */
             .gun-bubble {
                 position: fixed;
@@ -681,6 +700,52 @@
         const JIGGLE_MS        = 160;
 
         let DEBUG = false;
+
+        // ------- 結構釘位：house body 是 dynamic，倉鼠一撞就飄走，
+        //         在 play mode 每幀把它的速度歸零並推回原位；build mode 不釘（保留拖拉）
+        const PINNED_RE = /^house/i;   // 哪些前綴要釘住
+        const housePins = new Map();   // body → { x, y, z }
+        const isBuildMode = () => {
+            const m = document.getElementById('main');
+            return !!(m && m.classList && m.classList.contains('build-mode'));
+        };
+        scene.onBeforeRenderObservable.add(() => {
+            const world = findWorld();
+            if (!world) return;
+            // 編輯模式：清掉記錄並放生（不然拖不動）
+            if (isBuildMode()) {
+                if (housePins.size) housePins.clear();
+                return;
+            }
+            // 掃 world 的 body 鏈，新增 / 移除的 house body 都要追上
+            const seen = new Set();
+            let body = world.rigidBodies;
+            while (body) {
+                const name = body.name || '';
+                if (PINNED_RE.test(name) && body.isDynamic && body.inverseMass > 0) {
+                    seen.add(body);
+                    if (!housePins.has(body)) {
+                        housePins.set(body, {
+                            x: body.position.x,
+                            y: body.position.y,
+                            z: body.position.z,
+                        });
+                    }
+                }
+                body = body.next;
+            }
+            // 已不在 world 的就清掉
+            for (const b of housePins.keys()) if (!seen.has(b)) housePins.delete(b);
+            // 推回原位 + 速度歸零
+            for (const [b, p] of housePins) {
+                if (b.linearVelocity)  { b.linearVelocity.x  = 0; b.linearVelocity.y  = 0; b.linearVelocity.z  = 0; }
+                if (b.angularVelocity) { b.angularVelocity.x = 0; b.angularVelocity.y = 0; b.angularVelocity.z = 0; }
+                b.position.x = p.x;
+                b.position.y = p.y;
+                b.position.z = p.z;
+                b.syncShapes && b.syncShapes();
+            }
+        });
 
         const OWNER_KEYS = ['owner', 'gameObject', 'entity', '_owner', '_entity',
                             '__obj', 'accessory', 'parent3d'];
@@ -1093,6 +1158,7 @@
                 hamCounter.textContent = hamHits;
                 bumpStat(hamCounter);
                 hamsterFlash(mesh);
+                popBloodSplatter(point);
                 const cries = [
                     ['OUCH!',  ''],
                     ['EEK!',   ''],
@@ -1148,6 +1214,16 @@
                     ps.stop();
                     setTimeout(() => { try { ps.dispose(); } catch (e) {} }, 800);
                 }, 60);
+            } catch (e) {}
+        }
+
+        // 純螢幕邊緣紅色暈影（FPS-style 受擊閃光），不在命中點貼任何貼圖
+        function popBloodSplatter(/* point3d unused */) {
+            try {
+                const vig = document.createElement('div');
+                vig.className = 'gun-blood-vignette';
+                document.body.appendChild(vig);
+                setTimeout(() => vig.remove(), 600);
             } catch (e) {}
         }
 
