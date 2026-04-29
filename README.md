@@ -1,8 +1,10 @@
-# HammyHome 原碼蒸餾報告
+# Hammas
 
-> 來源：https://hammyhome.com/  版本 v1.4.0（更新於 2026-02-15）
-> 作者：aBowman（https://www.abowman.com）
-> 本資料夾為**學習研究用**本機離線副本，著作權屬原作者。
+> 參考來源：[hammyhome.com](https://hammyhome.com/)  版本 v1.4.0（更新於 2026-02-15）
+> 
+> 作者：[aBowman](https://www.abowman.com)
+> 
+> 著作權屬原作者
 
 ## 目錄結構
 
@@ -37,11 +39,7 @@ hama/
     └── all_meshes.txt        ← 所有 mesh / material 名稱
 ```
 
-## 一句話摘要
-
-**Babylon.js 打造的 3D 虛擬倉鼠飼養箱模擬器**，PWA 可離線執行，使用者能拼裝籠子、管道、配件，還能用著色器自訂倉鼠毛色與花紋。
-
-## 技術棧
+## 技術
 
 | 層 | 採用 |
 |----|------|
@@ -55,7 +53,7 @@ hama/
 
 ## 程式架構（來自 218 個頂層函式∕類別）
 
-### 容器（家園）
+### 容器
 - **Cage**：2×2、2×3、2×4、3×2、3×3、3×4、4×2、4×3、4×4（共 9 種尺寸）
 - **House**：House1 / House2 / House3 / House4（4 款外屋）
 - **Starter Homes**：starter1–4（4 款預設起始套裝）
@@ -130,7 +128,7 @@ python -m http.server 8080
 
 ## Gun Mod（自製模組）
 
-於 `src/js/gun.js` 注入，無修改原始 `ham.min.js`。
+於 `docs/js/gun.js` 注入，無修改原始 `ham.min.js`。
 
 ### 操作
 | 按鍵 | 動作 |
@@ -155,19 +153,4 @@ python -m http.server 8080
 
 ### 對原碼的改動
 1. `src/js/gun.js` — 新增（383 行，純附加）
-2. `src/index.html` — 新增 `<script src="js/gun.js">`；**開發期停用 Service Worker**（避免改檔被快取卡住），註解中寫了還原方式
-
-還原乾淨：刪 `gun.js`、復原 `index.html` 那一小段即可。
-
-## 可繼續深挖的方向
-
-1. **資料蒐羅器**：掃 `accessories*.json` 自動產生配件型錄（已有 `analysis/all_meshes.txt`）
-2. **倉鼠組合器**：獨立抽出 shader + Babylon.js 做一個毛色實驗室
-3. **架構圖**：以 `pretty/ham.js` 的 218 個類別畫出類別關係圖（EventsConfig/Navigator 三件組模式很漂亮）
-4. **PWA 模板**：`sw.js` 的多 bucket 版本快取是個乾淨的離線模式範例
-
-## 法律/倫理
-
-- 用戶端程式碼公開可讀，**個人研究、學習、修改不散佈**屬合理使用
-- 勿整站重製或商用——美術、3D 模型、著色器皆由作者原創
-- `robots.txt` 明訂 AI 訓練訊號需遵守
+2. `src/index.html` — 新增 `<script src="js/gun.js">`
